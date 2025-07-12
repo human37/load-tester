@@ -1,3 +1,5 @@
 mutations/*
 logs/*
 results/*
+
+.load-tester

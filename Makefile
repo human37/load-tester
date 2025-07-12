@@ -14,11 +14,12 @@ deps:
 	go mod tidy
 
 build: deps
-	go build -o load-test .
+	go build -o .load-tester .
 
 clean:
-	rm -f load-test
-	rm -f *.html
+	rm -f .load-tester
+	rm -rf results/*
+	rm -rf logs/*
 
 run: build
 	@if [ -z "$(req)" ]; then \
@@ -29,7 +30,7 @@ run: build
 		find mutations -name "*.yaml" -type f 2>/dev/null | head -10 || echo "  (no mutations directory found)"; \
 		exit 1; \
 	fi
-	./load-test -config $(req)
+	./.load-tester -config $(req)
 
 %:
 	@:
