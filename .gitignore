@@ -3,3 +3,7 @@ logs/*
 results/*
 
 .load-tester
+
+.DS_Store
+
+*.png
