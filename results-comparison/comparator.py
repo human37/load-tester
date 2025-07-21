@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 import sys
 import glob
+import datetime
 
 try:
     import readline
@@ -430,7 +431,9 @@ def create_comparison_graph(data_a, data_b, label_a, label_b):
 
     plt.tight_layout()
 
-    output_file = f"comparison_graph_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+    output_file = (
+        f"comparison_graph_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+    )
     plt.savefig(output_file, dpi=300, bbox_inches="tight")
     print(f"\n📊 Graph saved as: {output_file}")
     plt.show()
