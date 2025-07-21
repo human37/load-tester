@@ -111,3 +111,28 @@ variables:
     - id: "{{random.string(10)}}"
       result: "{{random.choice(success,failure)}}"
 ```
+
+## Comparison
+
+You can compare two load test results by running the following command:
+```
+python3 results-comparison/comparator.py
+```
+You will be prompted to enter the path to the first result (A) and the second result (B). They could be files or directories. If it is a directory, it will be compared by the average of all the files in the directory.
+It will generate a graph of the comparison and print the detailed comparison statistics like this:
+```
+================================================================================
+DETAILED LOAD TEST COMPARISON
+================================================================================
+Metric               sync save                 async save                Difference
+--------------------------------------------------------------------------------
+Requests/sec         32.12                     33.07                     +3.0%
+Avg Latency (ms)     245.6                     237.2                     -3.4%
+P50 Latency (ms)     228.3                     225.9                     -1.1%
+P75 Latency (ms)     237.0                     230.5                     -2.7%
+P95 Latency (ms)     362.4                     318.6                     -12.1%
+P99 Latency (ms)     472.5                     428.8                     -9.2%
+P99.9 Latency (ms)   1904.1                    554.1                     -70.9%
+Success Rate (%)     100.00                    100.00                    +0.0%
+================================================================================
+```
