@@ -22,11 +22,22 @@ logging:
   enabled: true
   file: "logs/your-mutation-name.csv"
 
-url: "http://localhost:8894/graphql"
-
-auth:
-  header: "Authorization"
-  value: "Bearer xxxxx"
+environments:
+  local:
+    url: "http://localhost:8894/graphql"
+    auth:
+      header: "Authorization"
+      value: "Bearer xxxxx"
+  dev:
+    url: "http://dev-url:8894/graphql"
+    auth:
+      header: "Authorization"
+      value: "Bearer xxxxx"
+  prod:
+    url: "http://prod-url:8894/graphql"
+    auth:
+      header: "Authorization"
+      value: "Bearer xxxxx"
 
 query: |
   mutation YourMutationName($input: [YourMutationInput!]!) {

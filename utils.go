@@ -342,7 +342,9 @@ func (al *AsyncLogger) IsEnabled() bool {
 	return al.enabled
 }
 
-func loadConfigFromFile(filename string) (*Config, error) {
+
+
+func loadConfigFromFile(filename, environment string) (*Config, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -353,8 +355,15 @@ func loadConfigFromFile(filename string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse YAML config: %w", err)
 	}
 
-	if yamlConfig.Auth.Header == "" {
-		yamlConfig.Auth.Header = "Authorization"
+	// Check if environment exists
+	envConfig, exists := yamlConfig.Environments[environment]
+	if !exists {
+		return nil, fmt.Errorf("environment '%s' not found in config file", environment)
+	}
+
+	// Set defaults
+	if envConfig.Auth.Header == "" {
+		envConfig.Auth.Header = "Authorization"
 	}
 	if yamlConfig.Load.Concurrency == 0 {
 		yamlConfig.Load.Concurrency = 10
@@ -363,35 +372,36 @@ func loadConfigFromFile(filename string) (*Config, error) {
 		yamlConfig.Load.Requests = 100
 	}
 
-	if yamlConfig.URL == "" {
-		return nil, fmt.Errorf("URL is required in config file")
+	// Validate required fields
+	if envConfig.URL == "" {
+		return nil, fmt.Errorf("URL is required for environment '%s' in config file", environment)
 	}
 	if yamlConfig.Query == "" {
 		return nil, fmt.Errorf("Query/Mutation is required in config file")
 	}
-	if yamlConfig.Auth.Value == "" {
-		return nil, fmt.Errorf("auth value is required in config file")
+	if envConfig.Auth.Value == "" {
+		return nil, fmt.Errorf("auth value is required for environment '%s' in config file", environment)
 	}
 
 	// Set default log file if logging is enabled but no file specified
 	logFile := yamlConfig.Logging.LogFile
 	if yamlConfig.Logging.Enabled && logFile == "" {
 		timestamp := time.Now().Format("20060102_150405")
-		logFile = fmt.Sprintf("results/request_log_%s.jsonl", timestamp)
+		logFile = fmt.Sprintf("results/%s/request_log_%s.jsonl", environment, timestamp)
 	}
 
 	config := &Config{
-		URL:           yamlConfig.URL,
+		URL:           envConfig.URL,
 		Mutation:      yamlConfig.Query,
-		AuthHeader:    yamlConfig.Auth.Header,
-		AuthValue:     yamlConfig.Auth.Value,
-		BaseAuthValue: yamlConfig.Auth.Value,
+		AuthHeader:    envConfig.Auth.Header,
+		AuthValue:     envConfig.Auth.Value,
+		BaseAuthValue: envConfig.Auth.Value,
 		Concurrency:   yamlConfig.Load.Concurrency,
 		TotalReqs:     yamlConfig.Load.Requests,
 		BaseVariables: yamlConfig.Variables,
 		ShowProgress:  true,
 		SaveResults:   true,
-		OutputDir:     "results",
+		OutputDir:     fmt.Sprintf("results/%s", environment),
 		LogRequests:   yamlConfig.Logging.Enabled,
 		LogFile:       logFile,
 	}

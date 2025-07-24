@@ -43,17 +43,21 @@ type Config struct {
 	LogFile       string
 }
 
-type MutationConfig struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	URL         string `yaml:"url"`
-	Auth        struct {
+type EnvConfig struct {
+	URL  string `yaml:"url"`
+	Auth struct {
 		Header string `yaml:"header"`
 		Value  string `yaml:"value"`
 	} `yaml:"auth"`
-	Query     string                 `yaml:"query"`
-	Variables map[string]interface{} `yaml:"variables"`
-	Load      struct {
+}
+
+type MutationConfig struct {
+	Name         string                    `yaml:"name"`
+	Description  string                    `yaml:"description"`
+	Environments map[string]EnvConfig      `yaml:"environments"`
+	Query        string                    `yaml:"query"`
+	Variables    map[string]interface{}    `yaml:"variables"`
+	Load         struct {
 		Concurrency int `yaml:"concurrency"`
 		Requests    int `yaml:"requests"`
 	} `yaml:"load"`
@@ -140,7 +144,9 @@ var (
 
 func main() {
 	var configFile string
+	var environment string
 	flag.StringVar(&configFile, "config", "", "Path to YAML configuration file (required)")
+	flag.StringVar(&environment, "env", "", "Environment to use from config file (required)")
 	flag.Parse()
 
 	if configFile == "" {
@@ -149,7 +155,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	config, err := loadConfigFromFile(configFile)
+	if environment == "" {
+		fmt.Printf("%sError: Environment is required%s\n", ColorRed, ColorReset)
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	config, err := loadConfigFromFile(configFile, environment)
 	if err != nil {
 		fmt.Printf("%sError loading config file: %v%s\n", ColorRed, err, ColorReset)
 		os.Exit(1)
