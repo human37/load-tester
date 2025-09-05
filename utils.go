@@ -342,8 +342,6 @@ func (al *AsyncLogger) IsEnabled() bool {
 	return al.enabled
 }
 
-
-
 func loadConfigFromFile(filename, environment string) (*Config, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -387,7 +385,12 @@ func loadConfigFromFile(filename, environment string) (*Config, error) {
 	logFile := yamlConfig.Logging.LogFile
 	if yamlConfig.Logging.Enabled && logFile == "" {
 		timestamp := time.Now().Format("20060102_150405")
-		logFile = fmt.Sprintf("results/%s/request_log_%s.jsonl", environment, timestamp)
+		logFile = fmt.Sprintf("results/%s/request_log_%s.csv", environment, timestamp)
+	}
+
+	totalReqs := yamlConfig.Load.Requests
+	if yamlConfig.Load.RPS > 0 && yamlConfig.Load.DurationSec > 0 {
+		totalReqs = yamlConfig.Load.RPS * yamlConfig.Load.DurationSec
 	}
 
 	config := &Config{
@@ -397,7 +400,9 @@ func loadConfigFromFile(filename, environment string) (*Config, error) {
 		AuthValue:     envConfig.Auth.Value,
 		BaseAuthValue: envConfig.Auth.Value,
 		Concurrency:   yamlConfig.Load.Concurrency,
-		TotalReqs:     yamlConfig.Load.Requests,
+		TotalReqs:     totalReqs,
+		TargetRPS:     yamlConfig.Load.RPS,
+		DurationSec:   yamlConfig.Load.DurationSec,
 		BaseVariables: yamlConfig.Variables,
 		ShowProgress:  true,
 		SaveResults:   true,

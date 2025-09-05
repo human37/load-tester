@@ -16,6 +16,7 @@ description: "Your mutation description"
 
 load:
   concurrency: 5 
+  rps: 10
   requests: 100 
 
 logging:

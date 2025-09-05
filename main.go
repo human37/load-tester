@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/jamiealquiza/tachymeter"
 	"github.com/schollz/progressbar/v3"
+	"golang.org/x/time/rate"
 )
 
 const (
@@ -35,6 +37,8 @@ type Config struct {
 	BaseAuthValue string
 	Concurrency   int
 	TotalReqs     int
+	TargetRPS     int
+	DurationSec   int
 	BaseVariables map[string]interface{}
 	ShowProgress  bool
 	SaveResults   bool
@@ -52,14 +56,16 @@ type EnvConfig struct {
 }
 
 type MutationConfig struct {
-	Name         string                    `yaml:"name"`
-	Description  string                    `yaml:"description"`
-	Environments map[string]EnvConfig      `yaml:"environments"`
-	Query        string                    `yaml:"query"`
-	Variables    map[string]interface{}    `yaml:"variables"`
+	Name         string                 `yaml:"name"`
+	Description  string                 `yaml:"description"`
+	Environments map[string]EnvConfig   `yaml:"environments"`
+	Query        string                 `yaml:"query"`
+	Variables    map[string]interface{} `yaml:"variables"`
 	Load         struct {
 		Concurrency int `yaml:"concurrency"`
 		Requests    int `yaml:"requests"`
+		RPS         int `yaml:"rps"`
+		DurationSec int `yaml:"duration_seconds"`
 	} `yaml:"load"`
 	Logging struct {
 		Enabled bool   `yaml:"enabled"`
@@ -109,6 +115,8 @@ type TestConfigSummary struct {
 	URL         string `json:"url"`
 	Concurrency int    `json:"concurrency"`
 	TotalReqs   int    `json:"total_requests"`
+	TargetRPS   int    `json:"target_rps"`
+	DurationSec int    `json:"duration_seconds"`
 }
 
 type ResultsSummary struct {
@@ -174,6 +182,12 @@ func main() {
 	fmt.Printf("%s%s=== configuration ===%s\n", ColorBold, ColorCyan, ColorReset)
 	fmt.Printf("%sconcurrency:%s %d\n", ColorBlue, ColorReset, config.Concurrency)
 	fmt.Printf("%stotal requests:%s %d\n", ColorBlue, ColorReset, config.TotalReqs)
+	if config.TargetRPS > 0 {
+		fmt.Printf("%starget rps:%s %d\n", ColorBlue, ColorReset, config.TargetRPS)
+	}
+	if config.DurationSec > 0 {
+		fmt.Printf("%sduration (s):%s %d\n", ColorBlue, ColorReset, config.DurationSec)
+	}
 	if config.SaveResults {
 		fmt.Printf("%soutput directory:%s %s\n", ColorBlue, ColorReset, config.OutputDir)
 	}
@@ -199,6 +213,16 @@ func runLoadTest(config *Config) *TestResults {
 		windowSize = config.TotalReqs
 	}
 
+	if config.TargetRPS > 0 && config.Concurrency <= 0 {
+		estP95 := 300 * time.Millisecond // adjust if you know better; or do a quick warm-up probe
+		config.Concurrency = int(math.Ceil(float64(config.TargetRPS) * estP95.Seconds()))
+		if config.Concurrency < 1 {
+			config.Concurrency = 1
+		}
+		fmt.Printf("%sderived concurrency:%s %d (from %d rps @ ~%s p95)\n",
+			ColorBlue, ColorReset, config.Concurrency, config.TargetRPS, estP95)
+	}
+
 	t := tachymeter.New(&tachymeter.Config{Size: windowSize})
 
 	var mu sync.Mutex
@@ -212,8 +236,17 @@ func runLoadTest(config *Config) *TestResults {
 	var progressMu sync.Mutex
 	var completedRequests int64
 
+	transport := &http.Transport{
+		MaxIdleConns:        10000,
+		IdleConnTimeout:     90 * time.Second,
+		MaxIdleConnsPerHost: config.Concurrency * 2,
+		MaxConnsPerHost:     config.Concurrency * 2,
+		ForceAttemptHTTP2:   true,
+		DisableCompression:  true,
+	}
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
+		Transport: transport,
 	}
 
 	wallTimeStart := time.Now()
@@ -241,6 +274,8 @@ func runLoadTest(config *Config) *TestResults {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	defer cancel()
+
 	var logger *AsyncLogger
 
 	if config.LogRequests {
@@ -264,10 +299,21 @@ func runLoadTest(config *Config) *TestResults {
 		}
 	}
 
+	var limiter *rate.Limiter
+	if config.TargetRPS > 0 {
+		limiter = rate.NewLimiter(rate.Limit(config.TargetRPS), config.TargetRPS)
+	}
+
 	for requestCount := 0; requestCount < config.TotalReqs; requestCount++ {
 		if atomic.LoadInt32(&gracefulShutdown) == 1 {
 			fmt.Printf("\n%sshutting down gracefully...%s\n", ColorYellow, ColorReset)
 			break
+		}
+
+		if limiter != nil {
+			if err := limiter.Wait(ctx); err != nil {
+				break
+			}
 		}
 
 		wg.Add(1)
@@ -314,12 +360,10 @@ func runLoadTest(config *Config) *TestResults {
 
 			result := makeRequest(client, config.URL, payloadBytes, config.AuthHeader, authValue, config.LogRequests)
 
-			// Log the request/response asynchronously
 			if logger != nil && logger.IsEnabled() {
 				logger.LogRequest(result.StatusCode, result.RequestBody, result.ResponseBody)
 			}
 
-			// Record timing immediately after the request (before any logging)
 			t.AddTime(result.Duration)
 
 			mu.Lock()
@@ -452,6 +496,8 @@ func saveResults(results *TestResults, config *Config) error {
 			URL:         config.URL,
 			Concurrency: config.Concurrency,
 			TotalReqs:   config.TotalReqs,
+			TargetRPS:   config.TargetRPS,
+			DurationSec: config.DurationSec,
 		},
 		Summary: ResultsSummary{
 			TotalRequests:  results.TotalRequests,
