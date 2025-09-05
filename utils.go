@@ -393,12 +393,26 @@ func loadConfigFromFile(filename, environment string) (*Config, error) {
 		totalReqs = yamlConfig.Load.RPS * yamlConfig.Load.DurationSec
 	}
 
+	// Merge headers: environment headers first, then mutation-specific headers
+	headers := make(map[string]string)
+	if envConfig.Headers != nil {
+		for k, v := range envConfig.Headers {
+			headers[k] = v
+		}
+	}
+	if yamlConfig.Headers != nil {
+		for k, v := range yamlConfig.Headers {
+			headers[k] = v // mutation headers override environment headers
+		}
+	}
+
 	config := &Config{
 		URL:           envConfig.URL,
 		Mutation:      yamlConfig.Query,
 		AuthHeader:    envConfig.Auth.Header,
 		AuthValue:     envConfig.Auth.Value,
 		BaseAuthValue: envConfig.Auth.Value,
+		Headers:       headers,
 		Concurrency:   yamlConfig.Load.Concurrency,
 		TotalReqs:     totalReqs,
 		TargetRPS:     yamlConfig.Load.RPS,
@@ -441,7 +455,7 @@ func setupSignalHandling() {
 }
 
 // makeRequest performs a single HTTP request and returns the result
-func makeRequest(client *http.Client, url string, payload []byte, authHeader, authValue string, logRequests bool) RequestResult {
+func makeRequest(client *http.Client, url string, payload []byte, authHeader, authValue string, headers map[string]string, logRequests bool) RequestResult {
 	start := time.Now()
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
@@ -455,6 +469,17 @@ func makeRequest(client *http.Client, url string, payload []byte, authHeader, au
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(authHeader, authValue)
+	
+	// Set custom headers
+	for key, value := range headers {
+		// Process any random placeholders in header values
+		processedValue := replaceRandomPlaceholders(value)
+		if str, ok := processedValue.(string); ok {
+			req.Header.Set(key, str)
+		} else {
+			req.Header.Set(key, fmt.Sprintf("%v", processedValue))
+		}
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {

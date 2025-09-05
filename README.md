@@ -26,16 +26,22 @@ logging:
 environments:
   local:
     url: "http://localhost:8894/graphql"
+    headers:
+      "X-Custom-Header": "Custom Value"
     auth:
       header: "Authorization"
       value: "Bearer xxxxx"
   dev:
     url: "http://dev-url:8894/graphql"
+    headers:
+      "X-Custom-Header": "Custom Value"
     auth:
       header: "Authorization"
       value: "Bearer xxxxx"
   prod:
     url: "http://prod-url:8894/graphql"
+    headers:
+      "X-Custom-Header": "Custom Value"
     auth:
       header: "Authorization"
       value: "Bearer xxxxx"

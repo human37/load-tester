@@ -35,6 +35,7 @@ type Config struct {
 	AuthHeader    string
 	AuthValue     string
 	BaseAuthValue string
+	Headers       map[string]string
 	Concurrency   int
 	TotalReqs     int
 	TargetRPS     int
@@ -48,24 +49,26 @@ type Config struct {
 }
 
 type EnvConfig struct {
-	URL  string `yaml:"url"`
-	Auth struct {
+	URL     string            `yaml:"url"`
+	Headers map[string]string `yaml:"headers"`
+	Auth    struct {
 		Header string `yaml:"header"`
 		Value  string `yaml:"value"`
 	} `yaml:"auth"`
 }
 
 type MutationConfig struct {
-	Name         string                 `yaml:"name"`
-	Description  string                 `yaml:"description"`
-	Environments map[string]EnvConfig   `yaml:"environments"`
-	Query        string                 `yaml:"query"`
-	Variables    map[string]interface{} `yaml:"variables"`
+	Name         string                    `yaml:"name"`
+	Description  string                    `yaml:"description"`
+	Environments map[string]EnvConfig      `yaml:"environments"`
+	Query        string                    `yaml:"query"`
+	Variables    map[string]interface{}    `yaml:"variables"`
+	Headers      map[string]string         `yaml:"headers"`
 	Load         struct {
-		Concurrency int `yaml:"concurrency"`
-		Requests    int `yaml:"requests"`
-		RPS         int `yaml:"rps"`
-		DurationSec int `yaml:"duration_seconds"`
+		Concurrency   int `yaml:"concurrency"`
+		Requests      int `yaml:"requests"`
+		RPS           int `yaml:"rps"`
+		DurationSec   int `yaml:"duration_seconds"`
 	} `yaml:"load"`
 	Logging struct {
 		Enabled bool   `yaml:"enabled"`
@@ -358,7 +361,7 @@ func runLoadTest(config *Config) *TestResults {
 				return
 			}
 
-			result := makeRequest(client, config.URL, payloadBytes, config.AuthHeader, authValue, config.LogRequests)
+			result := makeRequest(client, config.URL, payloadBytes, config.AuthHeader, authValue, config.Headers, config.LogRequests)
 
 			if logger != nil && logger.IsEnabled() {
 				logger.LogRequest(result.StatusCode, result.RequestBody, result.ResponseBody)
